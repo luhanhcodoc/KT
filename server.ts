@@ -168,7 +168,11 @@ app.get("/api/weather", async (req, res) => {
       try {
         console.log("Fetching live METAR data from aviationweather.gov service...");
         const icaoParam = icaos.join(",");
-     const response = await fetch(`https://allorigins.win{encodeURIComponent(`https://aviationweather.gov{icaoParam}`)}`);
+   const response = await fetch(
+  `https://api.allorigins.win/get?url=${encodeURIComponent(
+    `https://aviationweather.gov${icaoParam}`
+  )}`
+);
        
         if (response.ok) {
           const text = await response.text();
