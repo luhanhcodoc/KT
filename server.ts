@@ -168,8 +168,8 @@ app.get("/api/weather", async (req, res) => {
       try {
         console.log("Fetching live METAR data from aviationweather.gov service...");
         const icaoParam = icaos.join(",");
-        const response = await fetch(`https://aviationweather.gov/api/data/metar?ids=${icaoParam}`);
-        
+     const response = await fetch(`https://allorigins.win{encodeURIComponent(`https://aviationweather.gov{icaoParam}`)}`);
+       
         if (response.ok) {
           const text = await response.text();
           // NOAA response is newline separated raw metar strings, beginning with ICAO
