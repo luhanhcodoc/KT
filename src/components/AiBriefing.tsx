@@ -29,6 +29,113 @@ export default function AiBriefing({ weatherData }: AiBriefingProps) {
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
 
+  // Rule-based fallback summary when no AI backend is available (e.g., Vercel / Static Github deployment)
+  const generateLocalBriefing = (data: ParsedWeather[]): string => {
+    const total = data.length;
+    const alerts = data.filter(w => w.isAlert);
+    
+    const vvdn = data.find(w => w.icao === 'VVDN');
+    const vvca = data.find(w => w.icao === 'VVCA');
+    const vvpc = data.find(w => w.icao === 'VVPC');
+    const vvpk = data.find(w => w.icao === 'VVPK');
+    
+    const centralAirports = [
+      { name: 'Đà Nẵng', icao: 'VVDN', item: vvdn },
+      { name: 'Chu Lai', icao: 'VVCA', item: vvca },
+      { name: 'Phù Cát', icao: 'VVPC', item: vvpc },
+      { name: 'Pleiku', icao: 'VVPK', item: vvpk }
+    ].filter(a => a.item);
+
+    const highTemp = data.filter(w => w.temp >= 36);
+    const lowVis = data.filter(w => w.visibilityM < 5000);
+    const extremePhen = data.filter(w => w.isExtremePhenomena);
+
+    let report = `### 📝 BÁO CÁO PHÂN TÍCH KHÍ TƯỢNG HÀNG KHÔNG QUY CHUẨN (LOCAL FALLBACK)
+
+*(Bản tin dịch tự động do hệ thống đang chạy trên máy chủ tĩnh Vercel/GitHub)*
+
+## 1. Phân Tích Khí Tượng Tổng Quan (Miền Trung Trọng Điểm)
+- Hệ thống đang giám sát thời gian thực **${total}** sân bay Việt Nam. Có **${alerts.length}/${total}** trạm đang kích hoạt cảnh báo rủi ro sụt giảm chất lượng bay.
+- Diễn biến cụ thể tại các sân bay trọng tâm Miền Trung:
+`;
+
+    if (centralAirports.length > 0) {
+      centralAirports.forEach(a => {
+        report += `  - **Sân bay ${a.name} (${a.icao})**: Nhiệt độ ${a.item!.temp}°C, gió hướng ${a.item!.windDir} tốc độ ${a.item!.windSpeed}m/s. Tầm nhìn ngang đạt ${a.item!.visibility}. Trần mây: ${a.item!.clouds}. ${a.item!.phenomena !== 'Bình thường (Bầu trời trong)' ? `Hiện tượng: ${a.item!.phenomena}.` : 'Thời tiết quang đãng.'}\n`;
+      });
+    } else {
+      report += `  - Sân bay Đà Nẵng, Chu Lai, Phù Cát, Pleiku tạm thời chưa truyền phát bản tin METAR mới.\n`;
+    }
+
+    report += `
+## 2. Cảnh Báo Rủi Ro Khí Tượng Hàng Không (Hazards)
+`;
+
+    if (highTemp.length > 0) {
+      report += `- **Nắng nóng cực đoan (Nhiệt >= 36°C)**: Kích hoạt cảnh báo rủi ro nhiệt động lực học tại các trạm bay: ${highTemp.map(w => `**${w.icao}** (${w.temp}°C)`).join(', ')}. Khuyến cáo tổ bay kiểm soát mật độ phân luồng lực nâng cánh tàu bay khi chạy đà cất cánh kéo dài.\n`;
+    } else {
+      report += `- **Rủi ro nhiệt độ**: Trực quan nhiệt lượng ổn định dưới ngưỡng 36°C tại tất cả trạm quan trắc. Động cơ lực nâng vận hành an toàn.\n`;
+    }
+
+    if (lowVis.length > 0) {
+      report += `- **Tầm nhìn suy giảm (Vis < 5km)**: Ghi nhận hạn chế quan trắc giảm tầm nhìn phi đạo tại: ${lowVis.map(w => `**${w.icao}** (${w.visibility})`).join(', ')}. Khuyến nghị tổ lái chuẩn bị phương án ILS thiết bị hỗ trợ hoặc bay vòng tiếp cận.\n`;
+    } else {
+      report += `- **Chất lượng tầm nhìn**: Cự ly nhìn xa thông suốt rực rỡ (>5km). Cực kỳ thích ứng cho điều kiện cất hạ cánh tiếp cận trực giác (VFR).\n`;
+    }
+
+    if (extremePhen.length > 0) {
+      report += `- **Hiện tượng cực đoan (TS/RA...)**: Cảnh báo hoạt dông dông sét, mưa rào hoặc mù dốc che tầm khống chế bay lân cận vùng: ${extremePhen.map(w => `**${w.icao}** (${w.phenomena})`).join(', ')}. Tránh xuyên tâm mây tích điện (CB).\n`;
+    } else {
+      report += `- **Thời tiết nguy hiểm**: Chưa xuất hiện ổ dông dột kích hoặc hiện tượng dốc mưa cắt dứt làm xáo trộn gia tốc bề mặt.\n`;
+    }
+
+    report += `
+## 3. Khuyến Cáo Cho Tổ Bay & Đơn Vị Điều Hành (Advice)
+- **Tổ bay (Phi công)**: 
+  - Đề phòng bất ổn gió bề mặt (Windshear) tại Pleiku độ cao lớn và Đà Nẵng hành lang sát biển Quảng Nam.
+  - Luôn nạp dôi dư khoảng 15-20 phút dầu nhiên liệu dự bị tiếp xúc đường băng chờ hạ cánh khi gặp mưa dông bất chợt.
+- **Kỹ thuật không lưu**:
+  - Đo đạc liên tiếp và nhanh nhất áp suất QNH cục bộ để bảo đảm máy đo độ cao áp suất tàu bay hoạt động chuẩn khít tuyệt đối.`;
+
+    return report;
+  };
+
+  const generateLocalChatResponse = (text: string, data: ParsedWeather[]): string => {
+    const query = text.toLowerCase().trim();
+    const mainAps = [
+      { name: 'Đà Nẵng', icao: 'VVDN' },
+      { name: 'Chu Lai', icao: 'VVCA' },
+      { name: 'Phù Cát', icao: 'VVPC' },
+      { name: 'Pleiku', icao: 'VVPK' },
+      { name: 'Tân Sơn Nhất', icao: 'VVTS' },
+      { name: 'Nội Bài', icao: 'VVNB' },
+    ];
+    
+    const matched = mainAps.find(ap => query.includes(ap.icao.toLowerCase()) || query.includes(ap.name.toLowerCase()));
+    if (matched) {
+      const w = data.find(item => item.icao.toUpperCase() === matched.icao);
+      if (w) {
+        return `### 📊 Thống kê Khí tượng nhanh: **Sân bay ${matched.name} (${matched.icao})**\n\n- **Thời gian quan trắc**: ${w.localTimeDisplay || 'N/A'}\n- **Nhiệt độ hành lang**: ${w.temp}°C, điểm sương ${w.dewPoint}°C (Độ ẩm: ${w.humidity}%)\n- **Gió bề mặt**: Hướng ${w.windDir}, tốc độ ${w.windSpeed} m/s (xấp xỉ ${w.windSpeedKt} knots)\n- **Tầm nhìn ngang**: ${w.visibility}\n- **Trần mây hiện tại**: ${w.clouds}\n- **Khí áp quy chuẩn QNH**: ${w.pressure} hPa\n- **Trạng thái cảnh báo**: ${w.isAlert ? `⚠️ **CHÚ Ý** (${w.alertReasons.join('; ')})` : '✅ **Bảo đảm an toàn tiêu chuẩn, không có cảnh báo rủi ro nào.**.'}`;
+      }
+    }
+
+    if (query.includes('hiển thị') || query.includes('mâu') || query.includes('mây') || query.includes('few') || query.includes('sct') || query.includes('bkn') || query.includes('ovc')) {
+      return `### ☁️ Quy chuẩn quốc tế ICAO giải nghĩa mức che phủ mây:\n\n- **FEW**: Mây thưa (1/8 - 2/8 bầu trời bị che phủ)\n- **SCT**: Mây rải rác (3/8 - 4/8 bầu trời bị che phủ)\n- **BKN**: Mây nhiều / Trần mây (5/8 - 7/8 bầu trời bị che phủ) -> Kích hoạt ghi nhận trần mây khống chế bay.\n- **OVC**: Mây u ám / Kín trời (8/8 bầu trời bị che hoàn toàn)\n\n*Trần mây (Ceiling) thấp yêu cầu phi công phải bay bằng thiết bị dẫn đường ILS tuyệt đối để bảo toàn cự ly tiếp cận phi đạo.*`;
+    }
+
+    if (query.includes('gió') || query.includes('wind')) {
+      const highWind = [...data].sort((a,b) => b.windSpeed - a.windSpeed)[0];
+      return `### 💨 Phân tích hệ thống gió bề mặt sân bay:\n\n- Tốc độ gió mặt đất mạnh nhất hiện tại ở trạm: **${highWind ? `${highWind.windSpeed} m/s (${highWind.windSpeedKt} knots)` : 'N/A'}** tại sân bay **${highWind ? highWind.icao : 'chưa rõ'}**.\n- Hướng gió và vận tốc gió giật (Wind Gust) có ảnh hưởng quyết định đến thành phần gió xuôi hay cắt ngang cánh bay. Phi công hãy lựa chọn đúng hướng runway ngược gió để có hành trình cất hạ cánh ngắn nhất.`;
+    }
+
+    if (query.includes('nhiệt độ') || query.includes('temp') || query.includes('nóng')) {
+      const highTemp = [...data].sort((a,b) => b.temp - a.temp)[0];
+      return `### 🌡️ Phân tích nền nhiệt độ khí quyển:\n\n- Trạm quan trắc ghi nhận mức nhiệt cao nhất: **${highTemp ? `${highTemp.temp}°C` : 'N/A'}** tại sân bay **${highTemp ? highTemp.icao : 'N/A'}**.\n- **Chú ý rủi ro**: Chênh lệch nhiệt độ khí quyển lớn làm loãng mật độ không khí, dẫn đến lực đẩy và lực nâng tàu bay giảm. Nhiệt độ trên 36°C (chữ màu đỏ đậm) sẽ lập tức kích hoạt cảnh báo đặc biệt trên giao diện giám sát khí tượng hàng không VN.`;
+    }
+
+    return `### ✈️ Nhật ký Trợ lý Co-Pilot Khí tượng (Local Simulator Mode)\n\nTôi đang phân tích cơ sở dữ liệu METAR thời gian thực gồm **${data.length}** sân bay.\n\nBạn có thể hỏi bất kỳ câu hỏi nào:\n1. Để tra cứu nhanh một trạm, gõ trực tiếp tên sân bay hoặc mã ICAO tương ứng (Ví dụ: "Đà Nẵng", "VVDN", "Tân Sơn Nhất" hay "vvts").\n2. Hỏi chuyên sâu về các thuật ngữ hàng không như: "gió", "mây", "nhiệt độ" để tôi tóm tắt quy chuẩn ICAO tức thì!\n\n*(Lưu ý: Bạn đang chạy trên Vercel không có server-side Node, tôi đã tự động khởi động lõi phiên dịch khí tượng client để đồng hành cùng bạn)*`;
+  };
+
   // Generate automated AMC weather summary briefing
   const handleGenerateBriefing = async () => {
     setLoadingBrief(true);
@@ -40,6 +147,10 @@ export default function AiBriefing({ weatherData }: AiBriefingProps) {
         body: JSON.stringify({ weatherData })
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP Error Status: ${response.status}`);
+      }
+
       const result = await response.json();
       if (result.success) {
         setBriefResponse(result.summaryText);
@@ -48,7 +159,11 @@ export default function AiBriefing({ weatherData }: AiBriefingProps) {
         throw new Error(result.message || 'Lỗi không xác định khi tạo bản tin.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi mạng khi tải bản tin AI.');
+      console.warn('Backend Gemini API fails (maybe Vercel offline/no proxy). Activating Local Meteorologist agent backup.', err);
+      // Seamless rule-based fallback
+      const reportText = generateLocalBriefing(weatherData);
+      setBriefResponse(reportText);
+      setLoadedBriefTime(`${new Date().toLocaleTimeString('vi-VN')} (Cục bộ)`);
     } finally {
       setLoadingBrief(false);
     }
@@ -78,27 +193,6 @@ Hãy trả lời câu hỏi sau của phi công hoặc điều hành viên một
 Câu hỏi của phi công: "${userText}"
 `;
 
-      const response = await fetch('/api/gemini/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          weatherData: weatherData,
-          // We can append this prompt. In the backend we handle it if specified or fall back.
-          // Wait! Our backend summary route takes weatherData and prompts a summary. Let's make sure the backend endpoint
-          // can also accept a custom prompt if provided, or we can use the same server endpoint for chat as well.
-          // In server.ts, the endpoint takes weatherData and generates prompt based on it.
-          // Let's check how the server endpoint parses custom prompts or how we can implement a chat controller in server.ts!
-          // Wait! In server.ts, the endpoint was defined as receiving weatherData. We can modify server.ts or let the server
-          // handle a sub-prompt field `promptOverride`! Let's make sure our server can handle `promptOverride` in a updated server.ts,
-          // or we can make the call robust. Let's update server.ts to handle custom prompts if we send them, so that chat interacts with Gemini perfectly!
-          // Yes! We can modify server.ts later. Let's make sure we send promptOverride to the backend API.
-        })
-      });
-
-      // Oh wait, let's look at server.ts around the gemini summary route. Yes, it takes weatherData and builds a hardcoded prompt.
-      // Let's make it more flexible so it handles chat messages or custom requests!
-      // Let's specify the custom message or promptOverride under `promptOverride` in the POST body.
-      // Then we can update the backend server.ts to accept `promptOverride`.
       const chatResponse = await fetch('/api/gemini/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,14 +202,20 @@ Câu hỏi của phi công: "${userText}"
         })
       });
 
+      if (!chatResponse.ok) {
+        throw new Error(`HTTP Error Status: ${chatResponse.status}`);
+      }
+
       const chatResult = await chatResponse.json();
       if (chatResult.success) {
         setChatMessages(prev => [...prev, { sender: 'ai', text: chatResult.summaryText }]);
       } else {
-        setChatMessages(prev => [...prev, { sender: 'ai', text: `Rất tiếc, trợ lý gặp lỗi khi kết nối: ${chatResult.message}` }]);
+        throw new Error(chatResult.message || 'Lỗi không xác định.');
       }
     } catch (err: any) {
-      setChatMessages(prev => [...prev, { sender: 'ai', text: 'Không thể phản hồi. Vui lòng kiểm tra cổng API.' }]);
+      console.warn('Gemini Chat fails, initiating offline rule intelligence answer.', err);
+      const answer = generateLocalChatResponse(userText, weatherData);
+      setChatMessages(prev => [...prev, { sender: 'ai', text: answer }]);
     } finally {
       setLoadingChat(false);
     }
